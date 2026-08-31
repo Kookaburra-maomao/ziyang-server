@@ -1,44 +1,41 @@
-# 紫阳小张 Agent Server
+# 紫阳社区 AI Agent Server
 
-紫阳小张 Agent 的 Node.js 后端服务，为 Web 前端及其他客户端提供稳定的 Agent API 与业务能力。
+紫阳社区 AI Agent 的 Node.js 后端，同时承载 API 和 React 构建后的静态页面。
 
-## 项目定位
+## 能力
 
-本仓库负责服务端能力，计划包括：
+- 账号密码注册、登录，以及手机验证码免注册登录
+- 手机首次登录后强制补全用户名和密码
+- JWT 鉴权、bcrypt 密码哈希、MySQL 用户与聊天记录
+- 豆包文本对话和豆包 ASR 语音识别
+- React SPA 静态资源、前端路由回退和 PM2 配置
 
-- Agent 请求接收与任务编排
-- 会话、状态和业务数据管理
-- MySQL 数据访问
-- 鉴权、日志与统一错误处理
-- 面向 Web 前端的 API 服务
-
-## 技术方向
-
-- Node.js 22+
-- npm
-- PM2
-- MySQL 8.0
-
-具体 Web 框架、ORM 和目录结构将在项目初始化后补充。
-
-## 本地开发
+## 启动
 
 ```bash
-git clone git@github.com:Kookaburra-maomao/ziyang-server.git
-cd ziyang-server
+cp .env.example .env
 npm install
-npm run dev
+npm run db:init
+npm start
 ```
 
-## 生产运行
+生产运行：
 
 ```bash
-npm run build
 pm2 start ecosystem.config.js
+pm2 save
 ```
 
-> 当前仓库处于初始化阶段，实际命令以项目后续生成的 `package.json` 和 PM2 配置为准。
+## 主要接口
 
-## 关联项目
-
-Web 前端：[ziyang-web](https://github.com/Kookaburra-maomao/ziyang-web)
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/health` | 健康与能力状态 |
+| `POST` | `/api/auth/register` | 账号注册 |
+| `POST` | `/api/auth/login` | 账号登录 |
+| `POST` | `/api/sms/send` | 发送验证码 |
+| `POST` | `/api/auth/sms/login` | 手机验证码登录 |
+| `POST` | `/api/auth/complete-profile` | 补全账号资料 |
+| `GET` | `/api/chat/history` | 聊天记录 |
+| `POST` | `/api/chat` | 豆包文本对话 |
+| `POST` | `/api/asr/doubao` | 豆包语音识别 |
