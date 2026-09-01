@@ -99,10 +99,11 @@ async function pendingRelationsForElder(userId) {
     [userId],
   );
   return rows.map((row) => ({
-    ...row,
-    requester: row.username ? `${row.username.slice(0, 1)}**` : `${String(row.phone || '').slice(0, 3)}****${String(row.phone || '').slice(-4)}`,
-    username: undefined,
-    phone: undefined,
+    id: row.id,
+    relationLabel: row.relationLabel,
+    requesterUsername: row.username || null,
+    requesterPhone: row.phone || null,
+    createdAt: row.createdAt,
   }));
 }
 

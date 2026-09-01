@@ -324,7 +324,7 @@ async function respondByRole(user, text) {
     }
     if (/查看待确认家属关联/.test(text)) {
       const [rows] = await db.execute(
-        `SELECT r.id, r.relation_label AS relationLabel, u.username, u.phone
+        `SELECT r.id, r.relation_label AS relationLabel, u.username, u.phone, r.created_at AS createdAt
          FROM elder_relations r JOIN elder_profiles e ON e.id = r.elder_profile_id
          JOIN users u ON u.id = r.child_user_id
          WHERE e.user_id = ? AND r.status = 'pending'`,
@@ -335,7 +335,10 @@ async function respondByRole(user, text) {
         content: `有${rows.length}个家属关联申请，请核对后选择：`,
         relationActions: rows.map((row) => ({
           id: row.id,
-          label: `${row.username || `${String(row.phone).slice(0, 3)}****${String(row.phone).slice(-4)}`} 登记关系：${row.relationLabel}`,
+          requesterUsername: row.username || null,
+          requesterPhone: row.phone || null,
+          relationLabel: row.relationLabel,
+          createdAt: row.createdAt,
         })),
       };
     }

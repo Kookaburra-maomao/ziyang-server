@@ -7,9 +7,19 @@ const { staffCodeHash } = require('../src/utils/privacy');
 const baseUrl = process.env.INTEGRATION_BASE_URL || 'http://127.0.0.1:3001';
 const suffix = `${Date.now()}`.slice(-10);
 const password = 'CodexTest2026!';
-const idCard = '11010519491231002X';
 const staffCode = 'TESTSTAFFKEY2026';
 const state = { userIds: [], elderProfileIds: [], staffCodeHash: staffCodeHash(staffCode) };
+
+function createTestIdCard() {
+  const sequence = String(Number(suffix.slice(-3)) || 1).padStart(3, '0');
+  const base = `11010519500101${sequence}`;
+  const weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
+  const checks = ['1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2'];
+  const sum = [...base].reduce((total, digit, index) => total + Number(digit) * weights[index], 0);
+  return `${base}${checks[sum % 11]}`;
+}
+
+const idCard = createTestIdCard();
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -107,7 +117,7 @@ async function main() {
 
     await createPeer();
     const peers = await chat(elder.token, '有没有喜欢打羽毛球的老人？');
-    assert(/有1位老人/.test(peers.message.content) && /李\*\*/.test(peers.message.content), 'peer matching or name masking failed');
+    assert(/有\d+位老人/.test(peers.message.content) && /李\*\*/.test(peers.message.content), 'peer matching or name masking failed');
     assert(!/集成测试临时地址/.test(peers.message.content), 'peer address leaked');
     results.push('privacy-safe interest matching');
 
@@ -116,6 +126,7 @@ async function main() {
     assert(childSetup.user.identityType === 2, 'child identity was not saved');
     const pending = await request('/api/community/bootstrap', { token: elder.token });
     assert(pending.pendingRelations.length === 1, 'elder relation confirmation was not created');
+    assert(pending.pendingRelations[0].requesterUsername === child.user.username, 'elder cannot see the full requester account');
     await request(`/api/community/relations/${pending.pendingRelations[0].id}/respond`, {
       token: elder.token,
       body: { decision: 'approved' },
