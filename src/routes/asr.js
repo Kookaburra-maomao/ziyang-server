@@ -4,6 +4,19 @@ const { requireAuth, requireCompletedProfile } = require('../middleware/auth');
 const router = express.Router();
 router.use(requireAuth, requireCompletedProfile);
 
+function asrUserMessage(statusCode, upstreamMessage) {
+  const detail = String(upstreamMessage || '');
+  if (/silence|no valid speech|no speech|empty audio/i.test(detail)) {
+    return '没有听到有效语音，请靠近麦克风后再说一次';
+  }
+  if (/too short|duration.*short/i.test(detail)) return '录音时间太短，请说完后再结束录音';
+  if (/format|codec|decode|unsupported/i.test(detail)) return '录音格式暂不支持，请使用新版浏览器重试';
+  if (statusCode === '20000003') return '录音内容无法识别，请重新录制';
+  if (statusCode === '45000001' || statusCode === '45000002') return '录音参数不正确，请重新录制';
+  if (statusCode === '45000151') return '没有识别到有效语音，请再说一次';
+  return '语音识别暂时失败，请稍后再试';
+}
+
 router.post('/doubao', async (req, res) => {
   if (!process.env.DOUBAO_ASR_APP_ID || !process.env.DOUBAO_ASR_ACCESS_TOKEN) {
     return res.status(503).json({ code: 503, message: '语音识别尚未配置', data: { requiredEnv: ['DOUBAO_ASR_APP_ID', 'DOUBAO_ASR_ACCESS_TOKEN'] } });
@@ -44,7 +57,12 @@ router.post('/doubao', async (req, res) => {
     const logId = response.headers.get('x-tt-logid');
     if (statusCode !== '20000000') {
       const clientError = ['20000003', '45000001', '45000002', '45000151'].includes(statusCode);
-      return res.status(clientError ? 400 : 502).json({ code: clientError ? 400 : 502, message: message || '语音识别失败', data: { statusCode, logId } });
+      console.warn('[asr/doubao] rejected:', { statusCode, message, logId });
+      return res.status(clientError ? 400 : 502).json({
+        code: clientError ? 400 : 502,
+        message: asrUserMessage(statusCode, message),
+        data: { statusCode, logId },
+      });
     }
     return res.json({ code: 200, message: '语音识别成功', data: {
       text: result.result?.text || '',
