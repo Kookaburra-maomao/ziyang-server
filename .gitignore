@@ -3,3 +3,5 @@ node_modules/
 *.log
 .DS_Store
 .pm2/
+staff-keys*.txt
+*社工*密钥*.txt

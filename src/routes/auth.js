@@ -6,19 +6,8 @@ const { requireAuth } = require('../middleware/auth');
 const { verifySmsCode } = require('../services/sms');
 const { createToken } = require('../services/token');
 const { validatePhone, validateUsername, validatePassword } = require('../utils/validation');
+const { publicUser } = require('../utils/public-user');
 const router = express.Router();
-
-function publicUser(user) {
-  const profileCompleted = Boolean(user.profile_completed);
-  return {
-    id: user.id,
-    username: user.username || null,
-    phone: user.phone || null,
-    profileCompleted,
-    needsProfileSetup: !profileCompleted,
-    createdAt: user.created_at,
-  };
-}
 
 function authResponse(user, message = '登录成功') {
   return { code: 200, message, data: { token: createToken(user), user: publicUser(user) } };

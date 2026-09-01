@@ -22,6 +22,7 @@ app.use(express.json({ limit: '14mb' }));
 app.use('/api/health', require('./routes/health'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/sms', require('./routes/sms'));
+app.use('/api/community', require('./routes/community'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/asr', require('./routes/asr'));
 app.use(express.static(publicPath, { maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0 }));
