@@ -60,19 +60,30 @@ async function saveHealthCheckinAndReward(elder, fields, text) {
     const [checkin] = await connection.execute(
       `INSERT INTO health_checkins
        (elder_profile_id, systolic, diastolic, heart_rate, blood_glucose, temperature, sleep_hours, mood, symptoms, note)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [elder.id, fields.systolic, fields.diastolic, fields.heartRate, fields.bloodGlucose, fields.temperature, fields.sleepHours, fields.mood, null, redactSensitiveText(text)],
     );
-    await connection.execute('UPDATE elder_profiles SET egg_balance = egg_balance + 1 WHERE id = ?', [elder.id]);
     const [[profile]] = await connection.execute('SELECT egg_balance AS eggBalance FROM elder_profiles WHERE id = ? FOR UPDATE', [elder.id]);
-    await connection.execute(
-      `INSERT INTO egg_transactions
-       (elder_profile_id, health_checkin_id, transaction_type, amount, balance_after, note)
-       VALUES (?, ?, 'checkin_reward', 1, ?, '健康打卡奖励')`,
-      [elder.id, checkin.insertId, profile.eggBalance],
+    const [[reward]] = await connection.execute(
+      `SELECT id FROM egg_transactions
+       WHERE elder_profile_id = ? AND transaction_type = 'checkin_reward' AND reward_date = CURRENT_DATE()
+       LIMIT 1 FOR UPDATE`,
+      [elder.id],
     );
+    let eggBalance = Number(profile.eggBalance);
+    const rewarded = !reward;
+    if (rewarded) {
+      eggBalance += 1;
+      await connection.execute('UPDATE elder_profiles SET egg_balance = ? WHERE id = ?', [eggBalance, elder.id]);
+      await connection.execute(
+        `INSERT INTO egg_transactions
+         (elder_profile_id, health_checkin_id, transaction_type, reward_date, amount, balance_after, note)
+         VALUES (?, ?, 'checkin_reward', CURRENT_DATE(), 1, ?, '健康打卡奖励')`,
+        [elder.id, checkin.insertId, eggBalance],
+      );
+    }
     await connection.commit();
-    return Number(profile.eggBalance);
+    return { eggBalance, rewarded };
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -338,7 +349,7 @@ async function respondByRole(user, text) {
     }
     if (/(健康打卡|打卡|血压|心率|血糖|体温|睡眠\s*\d|心情)/.test(text)) {
       const fields = checkinFields(text);
-      const eggBalance = await saveHealthCheckinAndReward(elder, fields, text);
+      const reward = await saveHealthCheckinAndReward(elder, fields, text);
       const recorded = [
         fields.systolic ? `血压 ${fields.systolic}/${fields.diastolic}` : null,
         fields.heartRate ? `心率 ${fields.heartRate}` : null,
@@ -347,8 +358,11 @@ async function respondByRole(user, text) {
         fields.sleepHours ? `睡眠 ${fields.sleepHours}小时` : null,
         fields.mood ? `心情 ${fields.mood}` : null,
       ].filter(Boolean);
+      if (!reward.rewarded) return {
+        content: `健康打卡已保存。您今天已经领取过鸡蛋啦，每位老人每天只能领取1枚，您现在的鸡蛋有「${reward.eggBalance}枚」。`,
+      };
       return {
-        content: `恭喜您打卡成功，您现在的鸡蛋有「${eggBalance}枚」。${recorded.length ? `本次记录：${recorded.join('、')}。` : ''}`,
+        content: `恭喜您打卡成功，您现在的鸡蛋有「${reward.eggBalance}枚」。${recorded.length ? `本次记录：${recorded.join('、')}。` : ''}`,
       };
     }
     if (/查看待确认家属关联/.test(text)) {

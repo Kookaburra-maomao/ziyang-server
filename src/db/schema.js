@@ -117,11 +117,13 @@ const tableStatements = [
     elder_profile_id CHAR(36) NOT NULL,
     health_checkin_id BIGINT UNSIGNED NULL,
     transaction_type ENUM('checkin_reward', 'redeem', 'adjust') NOT NULL,
+    reward_date DATE NULL,
     amount INT NOT NULL,
     balance_after INT UNSIGNED NOT NULL,
     note VARCHAR(255) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_egg_transaction_checkin (health_checkin_id),
+    UNIQUE KEY uk_egg_daily_reward (elder_profile_id, transaction_type, reward_date),
     KEY idx_egg_transactions_elder_created (elder_profile_id, created_at),
     CONSTRAINT fk_egg_transaction_elder FOREIGN KEY (elder_profile_id) REFERENCES elder_profiles(id) ON DELETE CASCADE,
     CONSTRAINT fk_egg_transaction_checkin FOREIGN KEY (health_checkin_id) REFERENCES health_checkins(id) ON DELETE CASCADE
@@ -286,6 +288,23 @@ async function initializeSchema() {
   await ensureIndex('chat_messages', 'idx_chat_messages_user_kind', 'KEY idx_chat_messages_user_kind (user_id, message_kind)');
   for (const statement of tableStatements.slice(2)) await db.query(statement);
   await ensureColumn('elder_profiles', 'egg_balance', 'ADD COLUMN egg_balance INT UNSIGNED NOT NULL DEFAULT 0 AFTER status');
+  await ensureColumn('egg_transactions', 'reward_date', 'ADD COLUMN reward_date DATE NULL AFTER transaction_type');
+  await db.query(
+    `UPDATE egg_transactions transaction_row
+     JOIN (
+       SELECT MIN(id) AS id
+       FROM egg_transactions
+       WHERE transaction_type = 'checkin_reward'
+       GROUP BY elder_profile_id, DATE(created_at)
+     ) first_reward ON first_reward.id = transaction_row.id
+     SET transaction_row.reward_date = DATE(transaction_row.created_at)
+     WHERE transaction_row.reward_date IS NULL`,
+  );
+  await ensureIndex(
+    'egg_transactions',
+    'uk_egg_daily_reward',
+    'UNIQUE KEY uk_egg_daily_reward (elder_profile_id, transaction_type, reward_date)',
+  );
   await seedReferenceData();
 }
 

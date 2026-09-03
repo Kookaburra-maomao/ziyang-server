@@ -20,7 +20,7 @@ router.use(requireAuth, requireCompletedProfile);
 
 const identityLabels = { 1: '社区老人', 2: '老人子女', 3: '社区社工' };
 const identityPrompt = '您好，为了更好地帮助您，请选择您的身份：社区老人、老人子女或社区社工。';
-const eggCheckinPrompt = '每次健康打卡，可以领取鸡蛋1枚，您可以回复「打卡」或「健康打卡」。';
+const eggCheckinPrompt = '每天完成健康打卡，可以领取鸡蛋1枚，您可以回复「打卡」或「健康打卡」。';
 const detailPrompts = {
   1: '爷爷奶奶您好，您可以告诉我，您叫什么？家住在哪里吗？以及您的身份证号。您可以说：“张xx，金狮苑16幢2单元201室，33011019500101xxxx”。',
   2: '您需要先为家里长辈登记信息，并告诉我老人的姓名、和您的关系、身份证号。您可以说：“张xx，爸爸，33011019500101xxxx”。',

@@ -120,6 +120,8 @@ async function main() {
     assert(/鸡蛋有「1枚」/.test(eggBalance.message.content), 'egg balance lookup failed');
     const eggRedeem = await chat(elder.token, '兑换鸡蛋');
     assert(eggRedeem.message.content === '该功能很快就支持啦，再稍等等', 'egg redeem placeholder failed');
+    const repeatedCheckin = await chat(elder.token, '打卡');
+    assert(/每天只能领取1枚/.test(repeatedCheckin.message.content) && /鸡蛋有「1枚」/.test(repeatedCheckin.message.content), 'daily egg reward limit failed');
     const alert = await chat(elder.token, '我今天有点头晕和恶心');
     assert(/健康求助已记录/.test(alert.message.content), 'health alert was not recorded');
     results.push('elder interests/facilities/policies/check-in/alert');
@@ -141,7 +143,7 @@ async function main() {
       body: { decision: 'approved' },
     });
     const summary = await chat(child.token, '请介绍一下老人今天的情况');
-    assert(/健康打卡：1次/.test(summary.message.content) && /健康求助：1次/.test(summary.message.content), 'child summary counts are incorrect');
+    assert(/健康打卡：2次/.test(summary.message.content) && /健康求助：1次/.test(summary.message.content), 'child summary counts are incorrect');
     results.push('child relationship confirmation + daily summary');
 
     await db.execute(
