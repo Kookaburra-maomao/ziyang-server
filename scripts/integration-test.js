@@ -103,6 +103,10 @@ async function main() {
     const elderSetup = await setupIdentity(elder, 1, `${idCard}，家住金狮苑16幢2单元201室，我叫张爷爷`);
     assert(elderSetup.user.identityType === 1, 'elder identity was not saved');
     assert(!JSON.stringify(elderSetup).includes(idCard), 'raw ID card leaked in elder response');
+    const elderBootstrap = await request('/api/community/bootstrap', { token: elder.token });
+    assert(elderBootstrap.messages.some((item) => item.messageKind === 'egg_checkin_prompt'), 'elder egg reminder is missing');
+    assert(elderBootstrap.actions.some((item) => item.value === '查看鸡蛋'), 'egg balance shortcut is missing');
+    assert(elderBootstrap.actions.some((item) => item.value === '兑换鸡蛋'), 'egg redeem shortcut is missing');
     results.push('elder onboarding + ID redaction');
 
     await chat(elder.token, '我的爱好是：打羽毛球、写毛笔字');
@@ -110,7 +114,12 @@ async function main() {
     assert(/卫生服务|医院/.test(facilities.message.content), 'facility lookup failed');
     const notices = await chat(elder.token, '有什么最新社区政策和通知？');
     assert(/养老/.test(notices.message.content), 'policy lookup failed');
-    await chat(elder.token, '健康打卡：血压128/78，心率72，睡眠7小时，心情很好');
+    const checkin = await chat(elder.token, '健康打卡：血压128/78，心率72，睡眠7小时，心情很好');
+    assert(/鸡蛋有「1枚」/.test(checkin.message.content), 'check-in egg reward failed');
+    const eggBalance = await chat(elder.token, '查看鸡蛋');
+    assert(/鸡蛋有「1枚」/.test(eggBalance.message.content), 'egg balance lookup failed');
+    const eggRedeem = await chat(elder.token, '兑换鸡蛋');
+    assert(eggRedeem.message.content === '该功能很快就支持啦，再稍等等', 'egg redeem placeholder failed');
     const alert = await chat(elder.token, '我今天有点头晕和恶心');
     assert(/健康求助已记录/.test(alert.message.content), 'health alert was not recorded');
     results.push('elder interests/facilities/policies/check-in/alert');

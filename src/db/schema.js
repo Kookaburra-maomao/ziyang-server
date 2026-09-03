@@ -41,6 +41,7 @@ const tableStatements = [
     id_card_hmac CHAR(64) NOT NULL,
     id_card_last4 CHAR(4) NOT NULL,
     status ENUM('pending', 'active') NOT NULL DEFAULT 'pending',
+    egg_balance INT UNSIGNED NOT NULL DEFAULT 0,
     created_by_user_id CHAR(36) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -110,6 +111,20 @@ const tableStatements = [
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_health_checkins_elder_created (elder_profile_id, created_at),
     CONSTRAINT fk_health_checkin_elder FOREIGN KEY (elder_profile_id) REFERENCES elder_profiles(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`,
+  `CREATE TABLE IF NOT EXISTS egg_transactions (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    elder_profile_id CHAR(36) NOT NULL,
+    health_checkin_id BIGINT UNSIGNED NULL,
+    transaction_type ENUM('checkin_reward', 'redeem', 'adjust') NOT NULL,
+    amount INT NOT NULL,
+    balance_after INT UNSIGNED NOT NULL,
+    note VARCHAR(255) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_egg_transaction_checkin (health_checkin_id),
+    KEY idx_egg_transactions_elder_created (elder_profile_id, created_at),
+    CONSTRAINT fk_egg_transaction_elder FOREIGN KEY (elder_profile_id) REFERENCES elder_profiles(id) ON DELETE CASCADE,
+    CONSTRAINT fk_egg_transaction_checkin FOREIGN KEY (health_checkin_id) REFERENCES health_checkins(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`,
   `CREATE TABLE IF NOT EXISTS health_alerts (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -270,6 +285,7 @@ async function initializeSchema() {
   await ensureIndex('users', 'uk_users_id_card_hmac', 'UNIQUE KEY uk_users_id_card_hmac (id_card_hmac)');
   await ensureIndex('chat_messages', 'idx_chat_messages_user_kind', 'KEY idx_chat_messages_user_kind (user_id, message_kind)');
   for (const statement of tableStatements.slice(2)) await db.query(statement);
+  await ensureColumn('elder_profiles', 'egg_balance', 'ADD COLUMN egg_balance INT UNSIGNED NOT NULL DEFAULT 0 AFTER status');
   await seedReferenceData();
 }
 

@@ -20,6 +20,7 @@ router.use(requireAuth, requireCompletedProfile);
 
 const identityLabels = { 1: '社区老人', 2: '老人子女', 3: '社区社工' };
 const identityPrompt = '您好，为了更好地帮助您，请选择您的身份：社区老人、老人子女或社区社工。';
+const eggCheckinPrompt = '每次健康打卡，可以领取鸡蛋1枚，您可以回复「打卡」或「健康打卡」。';
 const detailPrompts = {
   1: '爷爷奶奶您好，您可以告诉我，您叫什么？家住在哪里吗？以及您的身份证号。您可以说：“张xx，金狮苑16幢2单元201室，33011019500101xxxx”。',
   2: '您需要先为家里长辈登记信息，并告诉我老人的姓名、和您的关系、身份证号。您可以说：“张xx，爸爸，33011019500101xxxx”。',
@@ -46,6 +47,8 @@ function actionsFor(user, pendingRelations = 0) {
     { id: 'facilities', label: '周边设施', type: 'send', value: '社区周边有什么配套设施？' },
     { id: 'notices', label: '政策通知', type: 'send', value: '有什么最新社区政策和通知？' },
     { id: 'checkin', label: '健康打卡', type: 'fill', value: '健康打卡：' },
+    { id: 'egg-balance', label: '查看鸡蛋', type: 'send', value: '查看鸡蛋' },
+    { id: 'egg-redeem', label: '兑换鸡蛋', type: 'send', value: '兑换鸡蛋' },
     { id: 'help', label: '健康求助', type: 'fill', value: '我有点不舒服：' },
     { id: 'find-interest', label: '找相同爱好', type: 'fill', value: '有没有喜欢打羽毛球的老人？' },
     ...(pendingRelations ? [{ id: 'relations', label: `家属关联待确认(${pendingRelations})`, type: 'send', value: '查看待确认家属关联' }] : []),
@@ -67,25 +70,23 @@ async function getUser(userId, executor = db) {
   return rows[0] || null;
 }
 
-async function ensureDailyMessage(user) {
-  let kind = null;
-  let content = null;
+async function ensureDailyMessages(user) {
+  const dailyMessages = [];
   if (!user.identity_type && !user.pending_identity_type) {
-    kind = 'identity_prompt';
-    content = identityPrompt;
+    dailyMessages.push(['identity_prompt', identityPrompt]);
   } else if (!user.identity_type && user.pending_identity_type) {
-    kind = 'identity_details_prompt';
-    content = detailPrompts[Number(user.pending_identity_type)];
+    dailyMessages.push(['identity_details_prompt', detailPrompts[Number(user.pending_identity_type)]]);
   } else if (user.identity_type) {
-    kind = 'role_welcome';
-    content = roleWelcomes[Number(user.identity_type)];
+    dailyMessages.push(['role_welcome', roleWelcomes[Number(user.identity_type)]]);
+    if (Number(user.identity_type) === 1) dailyMessages.push(['egg_checkin_prompt', eggCheckinPrompt]);
   }
-  if (!kind || !content) return;
-  const [rows] = await db.execute(
-    'SELECT 1 FROM chat_messages WHERE user_id = ? AND message_kind = ? AND created_at >= CURRENT_DATE() LIMIT 1',
-    [user.id, kind],
-  );
-  if (!rows.length) await saveMessage(user.id, 'assistant', content, kind);
+  for (const [kind, content] of dailyMessages) {
+    const [rows] = await db.execute(
+      'SELECT 1 FROM chat_messages WHERE user_id = ? AND message_kind = ? AND created_at >= CURRENT_DATE() LIMIT 1',
+      [user.id, kind],
+    );
+    if (!rows.length) await saveMessage(user.id, 'assistant', content, kind);
+  }
 }
 
 async function pendingRelationsForElder(userId) {
@@ -111,7 +112,7 @@ router.get('/bootstrap', async (req, res, next) => {
   try {
     const user = await getUser(req.user.userId);
     if (!user) return res.status(404).json({ code: 404, message: '用户不存在' });
-    await ensureDailyMessage(user);
+    await ensureDailyMessages(user);
     const pendingRelations = Number(user.identity_type) === 1 ? await pendingRelationsForElder(user.id) : [];
     const messages = await todayMessages(user.id);
     return res.json({ code: 200, message: 'ok', data: {

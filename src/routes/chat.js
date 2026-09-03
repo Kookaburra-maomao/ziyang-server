@@ -53,6 +53,34 @@ function checkinFields(text) {
   };
 }
 
+async function saveHealthCheckinAndReward(elder, fields, text) {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [checkin] = await connection.execute(
+      `INSERT INTO health_checkins
+       (elder_profile_id, systolic, diastolic, heart_rate, blood_glucose, temperature, sleep_hours, mood, symptoms, note)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [elder.id, fields.systolic, fields.diastolic, fields.heartRate, fields.bloodGlucose, fields.temperature, fields.sleepHours, fields.mood, null, redactSensitiveText(text)],
+    );
+    await connection.execute('UPDATE elder_profiles SET egg_balance = egg_balance + 1 WHERE id = ?', [elder.id]);
+    const [[profile]] = await connection.execute('SELECT egg_balance AS eggBalance FROM elder_profiles WHERE id = ? FOR UPDATE', [elder.id]);
+    await connection.execute(
+      `INSERT INTO egg_transactions
+       (elder_profile_id, health_checkin_id, transaction_type, amount, balance_after, note)
+       VALUES (?, ?, 'checkin_reward', 1, ?, '健康打卡奖励')`,
+      [elder.id, checkin.insertId, profile.eggBalance],
+    );
+    await connection.commit();
+    return Number(profile.eggBalance);
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function createHealthAlert(user, elder, text, severity) {
   const safeText = redactSensitiveText(text).slice(0, 500);
   const [result] = await db.execute(
@@ -304,14 +332,13 @@ async function respondByRole(user, text) {
     if (/(有没有|找|寻找).*(喜欢|爱好)|(相同爱好|同好)/.test(text)) return { content: await findInterestPeers(elder, text) };
     if (/(周边|配套|设施|医院|超市|饭店|小吃|理发|剪头发)/.test(text)) return { content: await facilityResponse(text) };
     if (/(政策|通知|补贴|社区消息)/.test(text)) return { content: await noticesResponse() };
+    if (/兑换鸡蛋/.test(text)) return { content: '该功能很快就支持啦，再稍等等' };
+    if (/(查看|查询|多少|余额|账户).{0,6}鸡蛋|鸡蛋.{0,6}(多少|余额)/.test(text)) {
+      return { content: `您现在的鸡蛋有「${Number(elder.egg_balance || 0)}枚」。` };
+    }
     if (/(健康打卡|打卡|血压|心率|血糖|体温|睡眠\s*\d|心情)/.test(text)) {
       const fields = checkinFields(text);
-      await db.execute(
-        `INSERT INTO health_checkins
-         (elder_profile_id, systolic, diastolic, heart_rate, blood_glucose, temperature, sleep_hours, mood, symptoms, note)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [elder.id, fields.systolic, fields.diastolic, fields.heartRate, fields.bloodGlucose, fields.temperature, fields.sleepHours, fields.mood, null, redactSensitiveText(text)],
-      );
+      const eggBalance = await saveHealthCheckinAndReward(elder, fields, text);
       const recorded = [
         fields.systolic ? `血压 ${fields.systolic}/${fields.diastolic}` : null,
         fields.heartRate ? `心率 ${fields.heartRate}` : null,
@@ -320,7 +347,9 @@ async function respondByRole(user, text) {
         fields.sleepHours ? `睡眠 ${fields.sleepHours}小时` : null,
         fields.mood ? `心情 ${fields.mood}` : null,
       ].filter(Boolean);
-      return { content: `今日健康打卡已保存${recorded.length ? `：${recorded.join('、')}` : '。本次已保存您的文字备注' }。` };
+      return {
+        content: `恭喜您打卡成功，您现在的鸡蛋有「${eggBalance}枚」。${recorded.length ? `本次记录：${recorded.join('、')}。` : ''}`,
+      };
     }
     if (/查看待确认家属关联/.test(text)) {
       const [rows] = await db.execute(
